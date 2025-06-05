@@ -1,0 +1,21 @@
+# How to use
+---------------------------------------------------------------------------
+1. Create a script and name it Whatever you wish
+2. Place the script in ServerScriptService
+3. Create team colors, the script uses colors from the color section below, but you can change them with no adverse effects
+4. Tag your parts with the same color that you have defined as the variable such as "BlackZone".
+
+
+---------------------------------------------------------------------------
+#Colors Used In Original Script
+---------------------------------------------------------------------------
+local TEAM_ZONE_TAGS = {
+	["BlackZone"] = "Really black",
+	["BlueZone"] = "Electric blue",
+	["GreenZone"] = "Lime green",
+	["OrangeZone"] = "Deep orange",
+	["PinkZone"] = "Hot pink",
+	["PurpleZone"] = "Magenta",
+	["RedZone"] = "Really red",
+	["YellowZone"] = "New Yeller",
+}
