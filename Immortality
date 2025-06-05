@@ -1,0 +1,162 @@
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+
+local ZONE_TAGS = {
+    ["BlackZone"] = "Really black",
+    ["BlueZone"] = "Electric blue",
+    ["GreenZone"] = "Lime green",
+    ["OrangeZone"] = "Deep orange",
+    ["PinkZone"] = "Hot pink",
+    ["PurpleZone"] = "Magenta",
+    ["RedZone"] = "Really red",
+    ["YellowZone"] = "New Yeller",
+}
+
+local unitsInZones = {}
+
+--------------------------------------------------------------------------------
+
+local function getUnitTeamColor(player)
+    if player.Team then
+        return player.Team.TeamColor.Name
+    end
+    return nil
+end
+
+local function isCorrectZone(player, zoneTag)
+    local teamColor = getUnitTeamColor(player)
+    local requiredTeam = ZONE_TAGS[zoneTag]
+    return teamColor == requiredTeam
+end
+
+--------------------------------------------------------------------------------
+
+local function removeImmunity(unit, zone)
+    local key = tostring(unit) .. "_" .. tostring(zone)
+    if unitsInZones[key] then
+        if unitsInZones[key].healthConnection then
+            unitsInZones[key].healthConnection:Disconnect()
+        end
+        unitsInZones[key] = nil
+    end
+end
+
+local function grantImmunity(unit, zone)
+    local humanoid = unit:FindFirstChild("Humanoid")
+    local player = Players:GetPlayerFromCharacter(unit)
+    if humanoid and player then
+        local key = tostring(unit) .. "_" .. tostring(zone)
+        unitsInZones[key] = {
+            unit = unit,
+            zone = zone,
+            healthConnection = nil,
+            lastHealth = humanoid.Health
+        }
+        unitsInZones[key].healthConnection = humanoid.HealthChanged:Connect(function(health)
+            local zoneTag = CollectionService:GetTags(zone)[1]
+            if not isCorrectZone(player, zoneTag) then
+                removeImmunity(unit, zone)
+                return
+            end
+            if health < unitsInZones[key].lastHealth then
+                humanoid.Health = unitsInZones[key].lastHealth
+            else
+                unitsInZones[key].lastHealth = health
+            end
+        end)
+    end
+end
+
+--------------------------------------------------------------------------------
+
+local function getUnitFromPart(hit)
+    local unit = hit.Parent
+    if unit and unit:FindFirstChild("Humanoid") then
+        return unit
+    end
+    return nil
+end
+
+local function onZoneEntered(zone, hit)
+    local unit = getUnitFromPart(hit)
+    if not unit then return end
+    local player = Players:GetPlayerFromCharacter(unit)
+    if not player then return end
+    local key = tostring(unit) .. "_" .. tostring(zone)
+    if unitsInZones[key] then return end
+    local zoneTag = CollectionService:GetTags(zone)[1]
+    if isCorrectZone(player, zoneTag) then
+        grantImmunity(unit, zone)
+    end
+end
+
+local function onZoneExited(zone, hit)
+    local unit = getUnitFromPart(hit)
+    if not unit then return end
+    local key = tostring(unit) .. "_" .. tostring(zone)
+    if not unitsInZones[key] then return end
+    wait(0.1)
+    local stillTouching = false
+    for _, child in pairs(unit:GetChildren()) do
+        if child:IsA("BasePart") then
+            local touchingParts = zone:GetTouchingParts()
+            for _, touchingPart in pairs(touchingParts) do
+                if touchingPart == child then
+                    stillTouching = true
+                    break
+                end
+            end
+        end
+    end
+    if not stillTouching then
+        removeImmunity(unit, zone)
+    end
+end
+
+--------------------------------------------------------------------------------
+
+for tagName, _ in pairs(ZONE_TAGS) do
+    local taggedParts = CollectionService:GetTagged(tagName)
+    for _, zone in pairs(taggedParts) do
+        zone.Touched:Connect(function(hit) onZoneEntered(zone, hit) end)
+        zone.TouchEnded:Connect(function(hit) onZoneExited(zone, hit) end)
+    end
+    CollectionService:GetInstanceAddedSignal(tagName):Connect(function(zone)
+        zone.Touched:Connect(function(hit) onZoneEntered(zone, hit) end)
+        zone.TouchEnded:Connect(function(hit) onZoneExited(zone, hit) end)
+    end)
+end
+
+--------------------------------------------------------------------------------
+
+Players.PlayerAdded:Connect(function(player)
+    player:GetPropertyChangedSignal("Team"):Connect(function()
+        if player.Character then
+            for key, data in pairs(unitsInZones) do
+                if data.unit == player.Character then
+                    removeImmunity(data.unit, data.zone)
+                end
+            end
+        end
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if player.Character then
+        for key, data in pairs(unitsInZones) do
+            if data.unit == player.Character then
+                removeImmunity(data.unit, data.zone)
+            end
+        end
+    end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterRemoving:Connect(function(character)
+        for key, data in pairs(unitsInZones) do
+            if data.unit == character then
+                removeImmunity(data.unit, data.zone)
+            end
+        end
+    end)
+end)
